@@ -1,0 +1,78 @@
+# Applies answers from the BBPlatform site builder to site.json on the `draft` branch.
+#
+# Triggered by the "Send Settings" agent:
+#   POST /repos/{owner}/{repo}/dispatches
+#   { "event_type": "update-settings",
+#     "client_payload": { "request_id": "<unique id>", "settings": { "brand_name": "Acme", ... } } }
+#
+# Flow: apply answers → validate → build → commit to draft. If any step fails, nothing is
+# committed and the run fails, so the "Build Watcher" agent sees conclusion=failure.
+# The run is named after request_id so Build Watcher can find this exact run.
+name: Update site settings
+run-name: update-settings ${{ github.event.client_payload.request_id || inputs.request_id || github.run_id }}
+
+on:
+  repository_dispatch:
+    types: [update-settings]
+  # Manual test from the Actions tab: paste the settings JSON.
+  workflow_dispatch:
+    inputs:
+      settings:
+        description: 'Settings JSON, e.g. {"brand_name":"Acme","color_primary":"#f97316"}'
+        required: true
+      request_id:
+        description: Optional id to name the run
+        required: false
+
+permissions:
+  contents: write
+
+# One update at a time per repo, in order; never drop a customer's change.
+concurrency:
+  group: site-settings
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.client_payload.branch || 'draft' }}
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Passed through env, never interpolated into the script, so answers can't inject shell.
+      - name: Apply settings
+        run: pnpm apply-settings
+        env:
+          SETTINGS_JSON: ${{ github.event_name == 'repository_dispatch' && toJSON(github.event.client_payload.settings) || inputs.settings }}
+
+      - name: Validate site.json
+        run: pnpm validate
+
+      - name: Build
+        run: pnpm build
+
+      - name: Commit to draft
+        env:
+          REQUEST_ID: ${{ github.event.client_payload.request_id || inputs.request_id || github.run_id }}
+          BRANCH: ${{ github.event.client_payload.branch || 'draft' }}
+        run: |
+          git config user.name "site-builder[bot]"
+          git config user.email "site-builder@users.noreply.github.com"
+          git add site.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit." >> "$GITHUB_STEP_SUMMARY"
+          else
+            git commit -m "Update site settings ($REQUEST_ID)"
+            git push origin "HEAD:$BRANCH"
+            echo "Committed site.json to $BRANCH." >> "$GITHUB_STEP_SUMMARY"
+          fi
