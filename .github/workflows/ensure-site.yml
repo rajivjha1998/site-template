@@ -1,0 +1,111 @@
+# Find-or-create a customer site repo. Runs only in the template repo (is_template), so the
+# copy that every customer repo inherits never runs.
+#
+# Triggered by the "Ensure Site" agent (always answers 204, so the platform never sees a 404):
+#   POST /repos/{owner}/site-template/dispatches
+#   { "event_type": "ensure-site",
+#     "client_payload": { "request_id": "<unique id>", "repo": "site-acme", "brand_name": "Acme",
+#                         "access_code": "<the site's access code>" } }
+#
+# Repo exists → the access code must match its .site-builder/access.json; then makes sure it's a
+#   site with a draft branch.
+# Repo missing → creates it from this template (private), stores the access code as a salted
+#   hash on main, lets its Actions commit, and creates the draft branch.
+# The run is named "ensure-site <request_id>"; Build Watcher on this repo waits for it.
+#
+# One-time setup: Settings → Secrets and variables → Actions → New repository secret
+#   SITE_BUILDER_TOKEN = a token with Administration + Contents read/write on the owner's repos.
+name: Ensure site
+run-name: ensure-site ${{ github.event.client_payload.request_id || github.run_id }}
+
+on:
+  repository_dispatch:
+    types: [ensure-site]
+
+permissions:
+  contents: read
+
+jobs:
+  ensure:
+    if: github.event.repository.is_template
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.SITE_BUILDER_TOKEN }}
+      OWNER: ${{ github.repository_owner }}
+      TEMPLATE: ${{ github.event.repository.name }}
+      REPO: ${{ github.event.client_payload.repo }}
+      DESCRIPTION: ${{ github.event.client_payload.brand_name }}
+      ACCESS_CODE: ${{ github.event.client_payload.access_code }}
+    steps:
+      - name: Mask the access code
+        run: '[ -n "$ACCESS_CODE" ] && echo "::add-mask::$ACCESS_CODE" || true'
+
+      # For scripts/access-code.mjs.
+      - uses: actions/checkout@v7
+
+      - name: Check inputs
+        run: |
+          [ -n "$GH_TOKEN" ] || { echo "::error::Secret SITE_BUILDER_TOKEN is not set in $OWNER/$TEMPLATE."; exit 1; }
+          [[ "$REPO" =~ ^[a-z0-9][a-z0-9-]{0,98}$ ]] || {
+            echo "::error::Site name '$REPO' must be lowercase letters, digits and dashes (e.g. site-acme-robotics)."; exit 1; }
+          [ "$REPO" != "$TEMPLATE" ] || { echo "::error::Use a name other than the template's."; exit 1; }
+          problem=$(node -e "import('./scripts/access-code.mjs').then(m => process.stdout.write(m.checkCodeRules(process.env.ACCESS_CODE) ?? ''))")
+          [ -z "$problem" ] || { echo "::error::$problem"; exit 1; }
+
+      - name: Use the repo, or create it
+        id: repo
+        run: |
+          if gh api "repos/$OWNER/$REPO" --silent 2>/dev/null; then
+            gh api "repos/$OWNER/$REPO/contents/site.json" --silent 2>/dev/null || {
+              echo "::error::$OWNER/$REPO exists but isn't a site (no site.json). Pick another name."; exit 1; }
+            record=$(gh api "repos/$OWNER/$REPO/contents/.site-builder/access.json?ref=main" \
+              -H "Accept: application/vnd.github.raw+json" 2>/dev/null) || {
+              echo "::error::This site has no access code yet. Ask the site owner to set one."; exit 1; }
+            printf '%s' "$record" | node scripts/access-code.mjs verify -
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            echo "Using existing repo $OWNER/$REPO (access code accepted)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh api -X POST "repos/$OWNER/$TEMPLATE/generate" \
+              -f owner="$OWNER" -f name="$REPO" -f description="${DESCRIPTION:-$REPO} website" \
+              -F private=true -F include_all_branches=false --silent
+            echo "created=true" >> "$GITHUB_OUTPUT"
+            echo "Created $OWNER/$REPO from $TEMPLATE." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Wait until the repo is ready
+        id: main
+        run: |
+          for i in $(seq 1 40); do
+            sha=$(gh api "repos/$OWNER/$REPO/git/ref/heads/main" --jq .object.sha 2>/dev/null) && [ -n "$sha" ] && {
+              echo "sha=$sha" >> "$GITHUB_OUTPUT"; exit 0; }
+            sleep 3
+          done
+          echo "::error::$OWNER/$REPO wasn't ready after 2 minutes."; exit 1
+
+      - name: Store the access code (new sites)
+        id: access
+        if: steps.repo.outputs.created == 'true'
+        run: |
+          content=$(node scripts/access-code.mjs hash | base64 -w0)
+          sha=$(gh api -X PUT "repos/$OWNER/$REPO/contents/.site-builder/access.json" \
+            -f message="Set access code" -f content="$content" -f branch=main --jq .commit.sha)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      # New repos don't inherit the template's Actions permissions; the settings Action needs write.
+      - name: Let the site's Actions save changes
+        if: steps.repo.outputs.created == 'true'
+        run: |
+          gh api -X PUT "repos/$OWNER/$REPO/actions/permissions/workflow" \
+            -f default_workflow_permissions=write -F can_approve_pull_request_reviews=false --silent
+
+      - name: Make sure the draft branch exists
+        env:
+          FROM_SHA: ${{ steps.access.outputs.sha || steps.main.outputs.sha }}
+        run: |
+          if gh api "repos/$OWNER/$REPO/git/ref/heads/draft" --silent 2>/dev/null; then
+            echo "Draft branch already exists." >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh api -X POST "repos/$OWNER/$REPO/git/refs" -f ref=refs/heads/draft -f sha="$FROM_SHA" --silent
+            echo "Created the draft branch." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Site ready: https://github.com/$OWNER/$REPO" >> "$GITHUB_STEP_SUMMARY"

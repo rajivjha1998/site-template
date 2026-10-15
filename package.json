@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "validate": "vitest run apps/website/src/content/site.test.ts",
     "schema": "UPDATE_SCHEMA=1 vitest run apps/website/src/content/site.test.ts",
-    "apply-settings": "node scripts/apply-settings.mjs"
+    "apply-settings": "node scripts/apply-settings.mjs",
+    "update-file": "node scripts/update-file.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

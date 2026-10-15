@@ -1,0 +1,52 @@
+# Owner-only: set or reset this site's access code (Actions tab → Set access code → Run
+# workflow). Only people with write access to the repo can run it. The code is stored as a
+# salted hash on main and draft, never as plain text.
+name: Set access code
+run-name: set-access-code
+
+on:
+  workflow_dispatch:
+    inputs:
+      access_code:
+        description: New access code (at least 8 characters)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  set:
+    if: ${{ !github.event.repository.is_template }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mask the code
+        env:
+          ACCESS_CODE: ${{ inputs.access_code }}
+        run: echo "::add-mask::$ACCESS_CODE"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Write the hash
+        env:
+          ACCESS_CODE: ${{ inputs.access_code }}
+        run: |
+          mkdir -p .site-builder
+          node scripts/access-code.mjs hash > .site-builder/access.json
+
+      - name: Commit to main and draft
+        run: |
+          git config user.name "site-builder[bot]"
+          git config user.email "site-builder@users.noreply.github.com"
+          git add .site-builder/access.json
+          git commit -m "Set access code"
+          git push origin HEAD:main
+          if git ls-remote --exit-code --heads origin draft >/dev/null; then
+            git fetch origin draft
+            git checkout -B draft origin/draft
+            git checkout main -- .site-builder/access.json
+            git commit -m "Set access code" || true
+            git push origin draft
+          fi
+          echo "Access code updated on main and draft." >> "$GITHUB_STEP_SUMMARY"

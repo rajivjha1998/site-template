@@ -1,0 +1,30 @@
+# Checks a site's access code without changing anything (Verify Access agent). The site
+# builder runs this first and only lets the user see or edit files when it succeeds.
+#
+#   POST /repos/{owner}/{repo}/dispatches
+#   { "event_type": "verify-access",
+#     "client_payload": { "request_id": "<unique id>", "access_code": "<code>" } }
+#
+# Success = the code matches .site-builder/access.json. Failure = wrong code, or no code set.
+name: Verify access
+run-name: verify-access ${{ github.event.client_payload.request_id || github.run_id }}
+
+on:
+  repository_dispatch:
+    types: [verify-access]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check access code
+        env:
+          ACCESS_CODE: ${{ github.event.client_payload.access_code }}
+        run: |
+          [ -n "$ACCESS_CODE" ] && echo "::add-mask::$ACCESS_CODE"
+          node scripts/access-code.mjs verify

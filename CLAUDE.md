@@ -26,11 +26,13 @@ A marketing website built from one file: `site.json` at the repo root. Astro (st
 site.json             all content (brand, theme, navigation, footer, pages, forms)
 site.schema.json      generated JSON Schema for site.json
 assets/               logo, favicon, images
-scripts/              apply-settings.mjs (site-builder answers → site.json)
+scripts/              apply-settings.mjs (builder answers → site.json), update-file.mjs (builder file edits), access-code.mjs (site access codes)
+site-builder.files.json  files the site builder may edit (exact paths)
+.site-builder/access.json  salted hash of the site's access code; never edit by hand or through the builder
 packages/ui/src/      @blackboxops/ui: schemas, sections, components, theme, tokens — no site copy
 apps/website/         Astro app that renders site.json
 apps/forms-worker/    form endpoint for static hosting
-.github/workflows/    update-settings (site builder → draft), check (validate + build on push)
+.github/workflows/    update-settings (builder answers / file edits / restores → draft; needs the access code), verify-access, set-access-code (owner only), ensure-site (template only), check
 ```
 
 ## Commands
