@@ -10,7 +10,8 @@
 # Repo exists → the access code must match its .site-builder/access.json; then makes sure it's a
 #   site with a draft branch.
 # Repo missing → creates it from this template (private), stores the access code as a salted
-#   hash on main, lets its Actions commit, and creates the draft branch.
+#   hash on main plus the sign-in key (.site-builder/keys/<code>/key), lets its Actions commit,
+#   and creates the draft branch.
 # The run is named "ensure-site <request_id>"; Build Watcher on this repo waits for it.
 #
 # One-time setup: Settings → Secrets and variables → Actions → New repository secret
@@ -91,6 +92,25 @@ jobs:
             -f message="Set access code" -f content="$content" -f branch=main --jq .commit.sha)
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
+      # Sign-in key: the platform signs users in by fetching this exact path (200 = right code).
+      # Added to new sites, and to existing sites that predate it (their code was checked above).
+      - name: Store the sign-in key
+        id: key
+        run: |
+          path=$(node scripts/access-code.mjs keypath)
+          if gh api "repos/$OWNER/$REPO/contents/$path?ref=main" --silent 2>/dev/null; then
+            echo "Sign-in key already present." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          content=$(node -e "import('./scripts/access-code.mjs').then(m => process.stdout.write(Buffer.from(m.KEY_FILE_CONTENT).toString('base64')))")
+          sha=$(gh api -X PUT "repos/$OWNER/$REPO/contents/$path" \
+            -f message="Add sign-in key" -f content="$content" -f branch=main --jq .commit.sha)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if [ "${{ steps.repo.outputs.created }}" != "true" ] && gh api "repos/$OWNER/$REPO/git/ref/heads/draft" --silent 2>/dev/null; then
+            gh api -X PUT "repos/$OWNER/$REPO/contents/$path" \
+              -f message="Add sign-in key" -f content="$content" -f branch=draft --silent
+          fi
+
       # New repos don't inherit the template's Actions permissions; the settings Action needs write.
       - name: Let the site's Actions save changes
         if: steps.repo.outputs.created == 'true'
@@ -100,7 +120,7 @@ jobs:
 
       - name: Make sure the draft branch exists
         env:
-          FROM_SHA: ${{ steps.access.outputs.sha || steps.main.outputs.sha }}
+          FROM_SHA: ${{ steps.key.outputs.sha || steps.access.outputs.sha || steps.main.outputs.sha }}
         run: |
           if gh api "repos/$OWNER/$REPO/git/ref/heads/draft" --silent 2>/dev/null; then
             echo "Draft branch already exists." >> "$GITHUB_STEP_SUMMARY"

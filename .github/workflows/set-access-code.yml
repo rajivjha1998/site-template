@@ -1,6 +1,6 @@
 # Owner-only: set or reset this site's access code (Actions tab → Set access code → Run
 # workflow). Only people with write access to the repo can run it. The code is stored as a
-# salted hash on main and draft, never as plain text.
+# salted hash plus a new sign-in key on main and draft (the old key stops working).
 name: Set access code
 run-name: set-access-code
 
@@ -28,24 +28,29 @@ jobs:
         with:
           ref: main
 
-      - name: Write the hash
+      - name: Write the hash and the sign-in key
         env:
           ACCESS_CODE: ${{ inputs.access_code }}
         run: |
           mkdir -p .site-builder
           node scripts/access-code.mjs hash > .site-builder/access.json
+          rm -rf .site-builder/keys
+          path=$(node scripts/access-code.mjs keypath)
+          mkdir -p "$(dirname "$path")"
+          node -e "import('./scripts/access-code.mjs').then(m => process.stdout.write(m.KEY_FILE_CONTENT))" > "$path"
 
       - name: Commit to main and draft
         run: |
           git config user.name "site-builder[bot]"
           git config user.email "site-builder@users.noreply.github.com"
-          git add .site-builder/access.json
+          git add -A .site-builder
           git commit -m "Set access code"
           git push origin HEAD:main
           if git ls-remote --exit-code --heads origin draft >/dev/null; then
             git fetch origin draft
             git checkout -B draft origin/draft
-            git checkout main -- .site-builder/access.json
+            git rm -r -q --ignore-unmatch .site-builder/keys
+            git checkout main -- .site-builder
             git commit -m "Set access code" || true
             git push origin draft
           fi

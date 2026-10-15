@@ -1,9 +1,13 @@
-// Site access codes. A site's code is never stored: `.site-builder/access.json` holds only a
-// salted scrypt hash, and every change request from the site builder must carry the code.
+// Site access codes.
+// - `.site-builder/access.json` holds a salted scrypt hash; every change request from the site
+//   builder must carry the code, and GitHub Actions check it against this hash.
+// - `.site-builder/keys/<code>/key` is the sign-in key: the platform signs a user in by fetching
+//   this exact path (instant: 200 = right code, 404 = wrong). It lives in the private repo.
 //
 //   ACCESS_CODE=... node scripts/access-code.mjs hash      → prints a new access.json
 //   ACCESS_CODE=... node scripts/access-code.mjs verify    → exit 0 if it matches access.json
 //   ACCESS_CODE=... node scripts/access-code.mjs verify <file|->   (record from a file or stdin)
+//   ACCESS_CODE=... node scripts/access-code.mjs keypath   → prints the sign-in key path
 import { Buffer } from 'node:buffer';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -18,9 +22,16 @@ export function checkCodeRules(code) {
   if (typeof code !== 'string' || code.length < 8)
     return 'The access code must be at least 8 characters.';
   if (code.length > 128) return 'The access code must be at most 128 characters.';
-  if (code.trim() !== code) return 'The access code must not start or end with a space.';
+  // The code is also a folder name in the sign-in key path (.site-builder/keys/<code>/key),
+  // so only URL- and path-safe characters are allowed.
+  if (!/^[A-Za-z0-9_-]+$/.test(code))
+    return 'The access code may only use letters, digits, dashes (-) and underscores (_).';
   return null;
 }
+
+/** Repo path of a site's sign-in key file for a given code. */
+export const keyPath = (code) => `.site-builder/keys/${code}/key`;
+export const KEY_FILE_CONTENT = 'BBPlatform site builder sign-in key. Do not edit.\n';
 
 export function hashCode(code, salt = randomBytes(16)) {
   const hash = scryptSync(code, salt, KEY_LENGTH, PARAMS);
@@ -68,7 +79,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     }
     if (!verifyCode(code, record)) fail('Wrong site name or access code.');
     console.log('Access code accepted.');
+  } else if (command === 'keypath') {
+    const problem = checkCodeRules(code);
+    if (problem) fail(problem);
+    process.stdout.write(keyPath(code));
   } else {
-    fail('Usage: access-code.mjs hash | verify [file|-]');
+    fail('Usage: access-code.mjs hash | verify [file|-] | keypath');
   }
 }

@@ -11,7 +11,11 @@
 #
 # Save one edited file instead (Save File agent; path must be listed in site-builder.files.json):
 #   { "event_type": "update-file",
-#     "client_payload": { "request_id": "<unique id>", "path": "CLAUDE.md", "content": "<whole file>" } }
+#     "client_payload": { "request_id": "<unique id>", "path": "CLAUDE.md", "content": "<whole file>",
+#                         "publish": "true" } }
+#
+# "publish": "true" (any event) also publishes draft to main right after a successful save, so the
+# platform doesn't have to wait and call Publisher.
 #
 # Every request must include the site's access code ("access_code" in client_payload); it is
 # checked against the hash in .site-builder/access.json before anything else runs.
@@ -130,3 +134,16 @@ jobs:
             git push origin --delete "$REQUEST_ID"
             echo "Session $REQUEST_ID closed." >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # Optional one-step publish: merge draft into main after a successful save.
+      - name: Publish to the live site
+        if: github.event_name == 'repository_dispatch' && contains(fromJSON('["true","yes","publish"]'), format('{0}', github.event.client_payload.publish))
+        env:
+          REQUEST_ID: ${{ github.event.client_payload.request_id || github.run_id }}
+        run: |
+          draft_sha=$(git rev-parse HEAD)
+          git fetch -q origin main
+          git checkout -q -B main origin/main
+          git merge --no-ff --no-edit -m "Publish ($REQUEST_ID)" "$draft_sha"
+          git push origin main
+          echo "Published to main." >> "$GITHUB_STEP_SUMMARY"
