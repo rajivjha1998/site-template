@@ -118,3 +118,15 @@ jobs:
             git push origin "HEAD:$BRANCH"
             echo "Committed $FILE to $BRANCH." >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # Closes the sign-in session opened by verify-access (a branch named after request_id), so
+      # the platform can see the save finished: the branch disappears only after a successful save.
+      - name: Close the sign-in session
+        if: github.event_name == 'repository_dispatch'
+        env:
+          REQUEST_ID: ${{ github.event.client_payload.request_id }}
+        run: |
+          if node scripts/session-id.mjs >/dev/null 2>&1 && git ls-remote --exit-code --heads origin "$REQUEST_ID" >/dev/null; then
+            git push origin --delete "$REQUEST_ID"
+            echo "Session $REQUEST_ID closed." >> "$GITHUB_STEP_SUMMARY"
+          fi
