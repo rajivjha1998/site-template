@@ -9,7 +9,8 @@
 #
 # Repo exists → the access code must match its .site-builder/access.json; then makes sure it's a
 #   site with a draft branch.
-# Optional "brief" (object of answers) → Claude writes the whole site into the new repo's draft.
+# Optional brief (flat fields summary, offerings, tone, goal, pages, details, or a "brief" object)
+#   → Claude writes the whole site into the new repo's draft.
 # Repo missing → creates it from this template (private; public if the site-template variable
 #   SITE_REPOS_PUBLIC is "true", for testing only), stores the access code as a salted
 #   hash on main plus the sign-in key (.site-builder/keys/<code>/key), lets its Actions commit,
@@ -44,8 +45,16 @@ jobs:
       REPOS_PUBLIC: ${{ vars.SITE_REPOS_PUBLIC }}
       ACCESS_CODE: ${{ github.event.client_payload.access_code }}
       REQUEST_ID: ${{ github.event.client_payload.request_id || github.run_id }}
-      # Optional answers for Claude to write the site from (see scripts/generate/brief.mjs).
-      BRIEF_JSON: ${{ toJSON(github.event.client_payload.brief) }}
+      # Optional answers for Claude to write the site from (see scripts/generate/brief.mjs). Either
+      # flat fields (what the Create Website form sends: GitHub allows 10 properties per request) or
+      # one "brief" object.
+      BRIEF_OBJECT: ${{ toJSON(github.event.client_payload.brief) }}
+      BRIEF_SUMMARY: ${{ github.event.client_payload.summary }}
+      BRIEF_OFFERINGS: ${{ github.event.client_payload.offerings }}
+      BRIEF_TONE: ${{ github.event.client_payload.tone }}
+      BRIEF_GOAL: ${{ github.event.client_payload.goal }}
+      BRIEF_PAGES: ${{ github.event.client_payload.pages }}
+      BRIEF_DETAILS: ${{ github.event.client_payload.details }}
     steps:
       - name: Mask the access code
         run: '[ -n "$ACCESS_CODE" ] && echo "::add-mask::$ACCESS_CODE" || true'
@@ -192,9 +201,31 @@ jobs:
       # pictures) from the customer's answers and saves it on the draft branch. The result is fully
       # checked before it is saved; if anything fails the site keeps the starter content and this
       # run fails at the end, so nobody thinks it worked. Existing sites are never overwritten.
+      # Puts the answers together into one brief (BRIEF_JSON) for the steps below.
+      - name: Collect the brief
+        id: brief
+        if: steps.repo.outputs.created == 'true'
+        run: |
+          if [ -n "$BRIEF_SUMMARY" ]; then
+            brief=$(jq -nc --arg business "$DESCRIPTION" --arg summary "$BRIEF_SUMMARY" --arg offerings "$BRIEF_OFFERINGS" \
+              --arg tone "$BRIEF_TONE" --arg goal "$BRIEF_GOAL" --arg pages "$BRIEF_PAGES" --arg notes "$BRIEF_DETAILS" \
+              '{business:$business, summary:$summary, offerings:$offerings, tone:$tone, goal:$goal, pages:$pages, notes:$notes}')
+          elif [ -n "$BRIEF_OBJECT" ] && [ "$BRIEF_OBJECT" != "null" ]; then
+            brief="$BRIEF_OBJECT"
+          else
+            echo "No brief sent; the site keeps its starter content." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "BRIEF_JSON<<BRIEF_EOF"
+            echo "$brief"
+            echo "BRIEF_EOF"
+          } >> "$GITHUB_ENV"
+          echo "present=true" >> "$GITHUB_OUTPUT"
+
       - name: Check the daily generation limit
         id: cap
-        if: steps.repo.outputs.created == 'true' && env.BRIEF_JSON != '' && env.BRIEF_JSON != 'null'
+        if: steps.brief.outputs.present == 'true'
         env:
           GENERATION_DAILY_CAP: ${{ vars.GENERATION_DAILY_CAP || '50' }}
         run: |

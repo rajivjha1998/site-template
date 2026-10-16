@@ -63,7 +63,7 @@ export const briefSchema = z.strictObject({
   keywords: optionalText(300),
   avoid: optionalText(500),
   language: z.preprocess(blankToUndefined, z.string().trim().max(40).default('English')),
-  notes: optionalText(2000),
+  notes: optionalText(3000),
 });
 
 /** Returns `{ ok: true, brief }` or `{ ok: false, problems: string[] }` in plain words. */
