@@ -19,6 +19,8 @@ on:
 
 permissions:
   contents: write
+  # Only to check that GitHub Pages is turned on (see the last step).
+  pages: read
 
 # A newer deploy of the same branch replaces an older one still running. Draft and main can
 # run side by side: the publish script merges their results safely.
@@ -91,3 +93,20 @@ jobs:
           DIST: apps/website/dist
           COMMIT_MESSAGE: Publish ${{ github.ref_name }} ${{ github.sha }}
         run: scripts/deploy-pages.sh
+
+      # Publishing only updates the gh-pages branch. If GitHub Pages itself is off, the address
+      # answers 404 even though everything above succeeded, so this run says so.
+      - name: Check GitHub Pages is on
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if out=$(gh api "repos/$GITHUB_REPOSITORY/pages" 2>&1); then
+            echo "GitHub Pages is on." >> "$GITHUB_STEP_SUMMARY"
+          elif echo "$out" | grep -qiE "not found|404"; then
+            msg="GitHub Pages is not turned on for this repo, so the address shows 404 although the site was built and published to gh-pages. Turn it on: Settings > Pages > Deploy from a branch > gh-pages, / (root), or re-run Ensure site. If Settings > Pages asks you to upgrade, your GitHub plan does not allow Pages for private repos."
+            echo "::error::$msg"
+            echo "**$msg**" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          else
+            echo "::warning::Could not check whether GitHub Pages is on: $out"
+          fi

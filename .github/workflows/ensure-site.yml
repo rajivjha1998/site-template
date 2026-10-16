@@ -9,7 +9,8 @@
 #
 # Repo exists → the access code must match its .site-builder/access.json; then makes sure it's a
 #   site with a draft branch.
-# Repo missing → creates it from this template (private), stores the access code as a salted
+# Repo missing → creates it from this template (private; public if the site-template variable
+#   SITE_REPOS_PUBLIC is "true", for testing only), stores the access code as a salted
 #   hash on main plus the sign-in key (.site-builder/keys/<code>/key), lets its Actions commit,
 #   sets up GitHub Pages hosting, and creates the draft branch (which starts the first preview).
 # The run is named "ensure-site <request_id>"; Build Watcher on this repo waits for it.
@@ -36,6 +37,10 @@ jobs:
       TEMPLATE: ${{ github.event.repository.name }}
       REPO: ${{ github.event.client_payload.repo }}
       DESCRIPTION: ${{ github.event.client_payload.brand_name }}
+      # Repository variable in site-template (Settings > Secrets and variables > Actions > Variables).
+      # "true" creates NEW site repos as public, for testing on a GitHub plan that doesn't allow
+      # Pages on private repos. Public repos expose the access code and the brief to everyone.
+      REPOS_PUBLIC: ${{ vars.SITE_REPOS_PUBLIC }}
       ACCESS_CODE: ${{ github.event.client_payload.access_code }}
     steps:
       - name: Mask the access code
@@ -66,11 +71,16 @@ jobs:
             echo "created=false" >> "$GITHUB_OUTPUT"
             echo "Using existing repo $OWNER/$REPO (access code accepted)." >> "$GITHUB_STEP_SUMMARY"
           else
+            private=true
+            [ "${REPOS_PUBLIC,,}" = "true" ] && private=false
             gh api -X POST "repos/$OWNER/$TEMPLATE/generate" \
               -f owner="$OWNER" -f name="$REPO" -f description="${DESCRIPTION:-$REPO} website" \
-              -F private=true -F include_all_branches=false --silent
+              -F private=$private -F include_all_branches=false --silent
             echo "created=true" >> "$GITHUB_OUTPUT"
-            echo "Created $OWNER/$REPO from $TEMPLATE." >> "$GITHUB_STEP_SUMMARY"
+            echo "Created $OWNER/$REPO from $TEMPLATE ($([ "$private" = true ] && echo private || echo PUBLIC))." >> "$GITHUB_STEP_SUMMARY"
+            if [ "$private" = false ]; then
+              echo "::warning::$REPO was created PUBLIC (SITE_REPOS_PUBLIC is true): anyone can read its files, including the access code. Use this for testing only."
+            fi
           fi
 
       - name: Wait until the repo is ready
@@ -124,6 +134,7 @@ jobs:
       # Needs the token's "Pages: Read and write" permission, and a GitHub plan that allows
       # Pages for private repos. If either is missing the site is still created; this step warns.
       - name: Set up hosting (GitHub Pages)
+        id: hosting
         run: |
           if ! gh api "repos/$OWNER/$REPO/git/ref/heads/gh-pages" --silent 2>/dev/null; then
             page='<!doctype html><meta charset="utf-8"><title>Coming soon</title><p style="font-family:system-ui;max-width:30rem;margin:4rem auto">This website has not been published yet.</p>'
@@ -133,13 +144,25 @@ jobs:
               | gh api -X POST "repos/$OWNER/$REPO/git/commits" --input - --jq .sha)
             gh api -X POST "repos/$OWNER/$REPO/git/refs" -f ref=refs/heads/gh-pages -f sha="$commit" --silent
           fi
-          if gh api "repos/$OWNER/$REPO/pages" --silent 2>/dev/null; then
-            echo "GitHub Pages is on." >> "$GITHUB_STEP_SUMMARY"
+          if pages=$(gh api "repos/$OWNER/$REPO/pages" 2>/dev/null); then
+            # Pages is on; make sure it publishes the gh-pages branch (a common slip is the
+            # draft or main branch, which serves the source files instead of the website).
+            source=$(printf '%s' "$pages" | jq -r '"\(.source.branch // "")|\(.source.path // "")"')
+            if [ "$source" = "gh-pages|/" ]; then
+              echo "GitHub Pages is on and publishes gh-pages." >> "$GITHUB_STEP_SUMMARY"
+            elif out=$(jq -n '{source:{branch:"gh-pages",path:"/"}}' | gh api -X PUT "repos/$OWNER/$REPO/pages" --input - 2>&1); then
+              echo "GitHub Pages was publishing '$source'; pointed it at gh-pages." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::warning::GitHub Pages publishes '$source' instead of gh-pages and could not be corrected. GitHub said: $out"
+              echo "Hosting NOT corrected: $out" >> "$GITHUB_STEP_SUMMARY"
+              echo "failed=true" >> "$GITHUB_OUTPUT"
+            fi
           elif out=$(jq -n '{source:{branch:"gh-pages",path:"/"}}' | gh api -X POST "repos/$OWNER/$REPO/pages" --input - 2>&1); then
             echo "Turned GitHub Pages on." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "::warning::GitHub Pages could not be turned on, so there will be no preview yet. Check the token has Pages: Read and write, and that your GitHub plan allows Pages for private repos. GitHub said: $out"
+            echo "::warning::GitHub Pages could not be turned on, so there will be no preview yet. Check the token has Pages: Read and write, and that your GitHub plan allows Pages for private repos (for testing you can set the site-template variable SITE_REPOS_PUBLIC to true so new sites are public). GitHub said: $out"
             echo "Hosting NOT set up: $out" >> "$GITHUB_STEP_SUMMARY"
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           fi
           echo "Preview: https://${OWNER,,}.github.io/$REPO/preview/" >> "$GITHUB_STEP_SUMMARY"
           echo "Live:    https://${OWNER,,}.github.io/$REPO/" >> "$GITHUB_STEP_SUMMARY"
@@ -155,3 +178,11 @@ jobs:
             echo "Created the draft branch." >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "Site ready: https://github.com/$OWNER/$REPO" >> "$GITHUB_STEP_SUMMARY"
+
+      # The site itself is ready, but without Pages there is no preview. Fail the run last so the
+      # problem is impossible to miss (the platform only sees "accepted").
+      - name: Report a hosting problem
+        if: steps.hosting.outputs.failed == 'true'
+        run: |
+          echo "::error::The site was created, but GitHub Pages could not be turned on, so it has no preview or live address yet. See the 'Set up hosting' step for GitHub's reason. Usual causes: the token lacks Pages: Read and write, or the GitHub plan does not allow Pages for private repos. Fix that and run Ensure site again with the same site name and access code."
+          exit 1
