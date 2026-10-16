@@ -9,6 +9,7 @@
 #
 # Repo exists → the access code must match its .site-builder/access.json; then makes sure it's a
 #   site with a draft branch.
+# Optional "brief" (object of answers) → Claude writes the whole site into the new repo's draft.
 # Repo missing → creates it from this template (private; public if the site-template variable
 #   SITE_REPOS_PUBLIC is "true", for testing only), stores the access code as a salted
 #   hash on main plus the sign-in key (.site-builder/keys/<code>/key), lets its Actions commit,
@@ -42,6 +43,9 @@ jobs:
       # Pages on private repos. Public repos expose the access code and the brief to everyone.
       REPOS_PUBLIC: ${{ vars.SITE_REPOS_PUBLIC }}
       ACCESS_CODE: ${{ github.event.client_payload.access_code }}
+      REQUEST_ID: ${{ github.event.client_payload.request_id || github.run_id }}
+      # Optional answers for Claude to write the site from (see scripts/generate/brief.mjs).
+      BRIEF_JSON: ${{ toJSON(github.event.client_payload.brief) }}
     steps:
       - name: Mask the access code
         run: '[ -n "$ACCESS_CODE" ] && echo "::add-mask::$ACCESS_CODE" || true'
@@ -184,10 +188,68 @@ jobs:
           fi
           echo "Site ready: https://github.com/$OWNER/$REPO" >> "$GITHUB_STEP_SUMMARY"
 
+      # Optional "brief": for a NEW site, Claude writes the whole website (pages, sections, simple
+      # pictures) from the customer's answers and saves it on the draft branch. The result is fully
+      # checked before it is saved; if anything fails the site keeps the starter content and this
+      # run fails at the end, so nobody thinks it worked. Existing sites are never overwritten.
+      - name: Check the daily generation limit
+        id: cap
+        if: steps.repo.outputs.created == 'true' && env.BRIEF_JSON != '' && env.BRIEF_JSON != 'null'
+        env:
+          GENERATION_DAILY_CAP: ${{ vars.GENERATION_DAILY_CAP || '50' }}
+        run: |
+          since=$(date -u +%Y-%m-%d)
+          runs=$(gh api "repos/$OWNER/$TEMPLATE/actions/workflows/ensure-site.yml/runs?created=%3E%3D$since&per_page=1" --jq .total_count)
+          if [ "$runs" -gt "$GENERATION_DAILY_CAP" ]; then
+            echo "::error::Today's limit of $GENERATION_DAILY_CAP generated sites is used up ($runs runs). The site was created with starter content; try again tomorrow or ask the owner to raise the repository variable GENERATION_DAILY_CAP."
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v6
+        if: steps.cap.outputs.allowed == 'true'
+
+      - uses: actions/setup-node@v7
+        if: steps.cap.outputs.allowed == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+        if: steps.cap.outputs.allowed == 'true'
+
+      - name: Write the website with Claude
+        id: generate
+        if: steps.cap.outputs.allowed == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/gen"
+          git clone -q --depth 1 --branch draft "https://x-access-token:${GH_TOKEN}@github.com/$OWNER/$REPO.git" "$RUNNER_TEMP/gen/repo" || {
+            echo "::error::Could not open the new site's draft branch."; echo "failed=true" >> "$GITHUB_OUTPUT"; exit 0; }
+          if ! pnpm generate --out "$RUNNER_TEMP/gen/repo"; then
+            echo "failed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          cd "$RUNNER_TEMP/gen/repo"
+          git config user.name "site-builder[bot]"
+          git config user.email "site-builder@users.noreply.github.com"
+          git add site.json assets
+          git commit -q -m "Write the website from the brief ($REQUEST_ID)" && git push -q origin HEAD:draft \
+            && echo "Wrote the website from the brief to the draft branch (preview updates in about 2 minutes)." >> "$GITHUB_STEP_SUMMARY" \
+            || { echo "::error::Could not save the generated website."; echo "failed=true" >> "$GITHUB_OUTPUT"; }
+
       # The site itself is ready, but without Pages there is no preview. Fail the run last so the
       # problem is impossible to miss (the platform only sees "accepted").
       - name: Report a hosting problem
         if: steps.hosting.outputs.failed == 'true'
         run: |
           echo "::error::The site was created, but GitHub Pages could not be turned on, so it has no preview or live address yet. See the 'Set up hosting' step for GitHub's reason. Usual causes: the token lacks Pages: Read and write, or the GitHub plan does not allow Pages for private repos. Fix that and run Ensure site again with the same site name and access code."
+          exit 1
+
+      - name: Report a generation problem
+        if: steps.cap.outputs.failed == 'true' || steps.generate.outputs.failed == 'true'
+        run: |
+          echo "::error::The site was created with starter content because the website could not be written from the brief. See the 'Write the website with Claude' step (or the daily limit step) for the reason, then edit the site in the Studio or run Ensure site again with a new site name."
           exit 1

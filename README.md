@@ -41,3 +41,10 @@ The site is published with GitHub Pages from the `gh-pages` branch, which the **
 - Custom domain: set the repository variables `SITE_URL` (e.g. `https://www.example.com`) and `SITE_BASE` (`/`), and add the domain in Settings → Pages.
 - Private repos need a GitHub plan that includes Pages for private repos. The published site is public even though the repo is private.
 - `/studio.json` on each address lists the sections, the schema and which version is live; the site builder reads it.
+
+## Writing a site with Claude
+`pnpm generate --brief scripts/generate/samples/bakery.json` writes `site.json` and `assets/*.svg` from a brief (needs `ANTHROPIC_API_KEY`). Claude's answer is checked like a build (schema, links, images, no forms, size) and sent back for fixes up to 3 times; nothing is saved unless it passes. Pictures are simple SVG drawings, sanitised (no scripts or outside links); anything Claude cannot know is written as `[Pending: …]` and blocks publishing.
+
+- Try it without a customer repo: Actions > **Generate a test site** (uses the `ANTHROPIC_API_KEY` secret, downloadable result).
+- In the product: send a `brief` object with the `ensure-site` event; for a NEW site Claude writes it into the draft branch. Daily limit: repository variable `GENERATION_DAILY_CAP` (default 50).
+- Brief fields: `scripts/generate/brief.mjs`.

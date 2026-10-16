@@ -23,9 +23,11 @@
     "update-file": "node scripts/update-file.mjs",
     "build:full": "SITE_CONFIG=tests/fixtures/full.site.json SITE_ASSETS_DIR=tests/fixtures/assets SITE_OUT_DIR=dist-full pnpm --filter @blackboxops/website build",
     "test:e2e:full": "E2E_FULL=1 E2E_DIST=apps/website/dist-full E2E_SITE=apps/website/tests/fixtures/full.site.json SITE_CONFIG=tests/fixtures/full.site.json SITE_ASSETS_DIR=tests/fixtures/assets SITE_OUT_DIR=dist-full playwright test routes.spec full-site.spec",
-    "check-publish": "node scripts/check-publish.mjs"
+    "check-publish": "node scripts/check-publish.mjs",
+    "generate": "node --import ./scripts/register-ts.mjs scripts/generate-site.mjs"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
     "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
