@@ -159,6 +159,11 @@ jobs:
             fi
           elif out=$(jq -n '{source:{branch:"gh-pages",path:"/"}}' | gh api -X POST "repos/$OWNER/$REPO/pages" --input - 2>&1); then
             echo "Turned GitHub Pages on." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$(gh api "repos/$OWNER/$REPO" --jq .private 2>/dev/null)" = "true" ] && echo "$out" | grep -qiE "plan|upgrade|not support"; then
+            # Expected on a GitHub plan without Pages for private repos: the site is fine and
+            # simply has no preview until the repo is made public (or hosting moves elsewhere).
+            echo "::notice::$REPO is private and this GitHub plan does not allow Pages for private repos, so there is no preview yet. Make the repo public, then run Ensure site again with the same site name and access code to switch the preview on."
+            echo "Hosting waiting: the repo is private and the plan has no Pages for private repos. After making it public, run Ensure site again (same site name and access code). GitHub said: $out" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "::warning::GitHub Pages could not be turned on, so there will be no preview yet. Check the token has Pages: Read and write, and that your GitHub plan allows Pages for private repos (for testing you can set the site-template variable SITE_REPOS_PUBLIC to true so new sites are public). GitHub said: $out"
             echo "Hosting NOT set up: $out" >> "$GITHUB_STEP_SUMMARY"

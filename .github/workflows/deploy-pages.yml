@@ -99,14 +99,22 @@ jobs:
       - name: Check GitHub Pages is on
         env:
           GH_TOKEN: ${{ github.token }}
+          IS_PRIVATE: ${{ github.event.repository.private }}
         run: |
           if out=$(gh api "repos/$GITHUB_REPOSITORY/pages" 2>&1); then
             echo "GitHub Pages is on." >> "$GITHUB_STEP_SUMMARY"
           elif echo "$out" | grep -qiE "not found|404"; then
             msg="GitHub Pages is not turned on for this repo, so the address shows 404 although the site was built and published to gh-pages. Turn it on: Settings > Pages > Deploy from a branch > gh-pages, / (root), or re-run Ensure site. If Settings > Pages asks you to upgrade, your GitHub plan does not allow Pages for private repos."
-            echo "::error::$msg"
-            echo "**$msg**" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
+            if [ "$IS_PRIVATE" = "true" ]; then
+              # Expected while the repo is private on a plan without Pages: the site is built and
+              # published to gh-pages, and will show as soon as Pages is turned on.
+              echo "::warning::$msg"
+              echo "**$msg**" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::$msg"
+              echo "**$msg**" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
           else
             echo "::warning::Could not check whether GitHub Pages is on: $out"
           fi
