@@ -77,6 +77,20 @@ export const siteConfigSchema = z
     if (!site.pages['/']) {
       ctx.addIssue({ code: 'custom', path: ['pages'], message: 'Add a home page at "/".' });
     }
+    const groups = new Set(
+      Object.values(site.pages).flatMap((page) => (page.card ? [page.card.group] : [])),
+    );
+    for (const [path, page] of Object.entries(site.pages)) {
+      page.sections.forEach((section, index) => {
+        if (section.type === 'pageCards' && !section.hidden && !groups.has(section.group)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['pages', path, 'sections', index, 'group'],
+            message: `No page has card.group "${section.group}", so this page-links section would be empty. Give pages a "card" with that group, or remove the section.`,
+          });
+        }
+      });
+    }
     for (const [id, form] of Object.entries(site.forms)) {
       if (form.id !== id) {
         ctx.addIssue({

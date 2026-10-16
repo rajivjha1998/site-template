@@ -218,3 +218,12 @@ describe('brief wrapped in text', () => {
     expect(normaliseBrief(JSON.stringify(inner)).ok).toBe(true);
   });
 });
+
+describe('page cards', () => {
+  it('flags a pageCards section whose group no page has', () => {
+    const bad = structuredClone(starter);
+    bad.pages['/about/'] ??= structuredClone(bad.pages['/']);
+    bad.pages['/about/'].sections.push({ type: 'pageCards', title: 'More', group: 'main' });
+    expect(validateSite(bad, ['assets/placeholder.svg']).join('\n')).toMatch(/card\.group "main"/);
+  });
+});
