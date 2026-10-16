@@ -3,10 +3,16 @@ import type { SectionOf } from '../schemas/sections';
 import SectionShell from '../primitives/SectionShell.astro';
 import SectionHeading from '../primitives/SectionHeading.astro';
 import IconTile from '../primitives/IconTile.astro';
+import Picture from '../primitives/Picture.astro';
+import type { WithResolvedImage } from '../lib/image';
 import Ctas from '../primitives/Ctas.astro';
 import { withBase } from '../lib/href';
 
-type Props = Omit<SectionOf<'featureGrid'>, 'type'> & { uid: string };
+type Item = SectionOf<'featureGrid'>['items'][number];
+type Props = Omit<SectionOf<'featureGrid'>, 'type' | 'items'> & {
+  uid: string;
+  items: WithResolvedImage<Item>[];
+};
 const { uid, icon, anchor, title, titleAccent, lede, band, columns, variant, items, ctas } =
   Astro.props;
 const id = `${uid}-title`;
@@ -17,7 +23,11 @@ const id = `${uid}-title`;
   <ul class:list={['grid', variant]} style={`--cols: ${columns}`}>
     {items.map((item) => (
       <li class="item">
-        {item.icon && <IconTile name={item.icon} />}
+        {item.image ? (
+          <Picture image={item.image} ratio="3 / 2" />
+        ) : (
+          item.icon && <IconTile name={item.icon} />
+        )}
         <h3>{item.title}</h3>
         <p>{item.body}</p>
         {item.href && (

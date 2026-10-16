@@ -102,21 +102,26 @@ Section `type` values (content) → components. Exact fields: `packages/ui/src/s
 
 | `type` | Component | Use it for | Notes |
 |---|---|---|---|
-| `hero` | Hero | the page's only H1 | `layout: split` (text + window) or `centered`; optional `context` line, ≤2 CTAs, `note` |
-| `logoStrip` | LogoStrip | "Runs on / integrates with" | text chips until real logos are approved |
-| `statStrip` | StatStrip | 2–4 factual figures | heading optional; `source` line for any claim |
-| `featureGrid` | FeatureGrid | capabilities, benefits | 2/3/4 columns, `plain` or `cards`, icons from §9 |
-| `tabbedShowcase` | TabbedShowcase | 2–6 parallel options | WAI-ARIA tabs; all panels stay in the HTML |
-| `split` | Split | one idea + one window | `reverse` puts the window left |
+| `hero` | Hero | the page's only H1 | `layout: split` (text + picture) or `centered`; optional `context` line, ≤2 CTAs, `note`, `image` |
+| `logoStrip` | LogoStrip | "Works with / seen in" | text chips, or `image` logos per item |
+| `statStrip` | StatStrip | 2–4 factual figures | `source` line for any claim |
+| `featureGrid` | FeatureGrid | capabilities, benefits | 2/3/4 columns, `plain` or `cards`; each item has an icon or an `image` |
+| `split` | Split | one idea + one picture | `image`; `reverse` puts it on the left |
 | `steps` | Steps | a real sequence | numbered only because order matters |
-| `comparisonTable` | ComparisonTable | tiers or alternatives | ✓ / — / text values; scrolls inside its box on phones |
+| `offers` | Offers | products or services | up to 9 cards: `image`, `badge`, `price`, `priceNote`, `cta` |
+| `gallery` | Gallery | a set of photos | 2–12 images, optional captions, 2–4 columns |
+| `team` | Team | the people | photo or initials, role, short bio |
+| `testimonial` | Testimonial | one approved quote | verbatim only; optional `avatar` |
 | `pricingTable` | PricingTable | plans | one `highlight` plan |
-| `testimonial` | Testimonial | one approved quote | verbatim only |
-| `pageCards` | PageCards | hubs, catalogues, related pages | lists pages by `card.group` / tag, so hubs update themselves |
-| `tierLadder` | TierLadder | partner tiers | each tier steps up |
+| `comparisonTable` | ComparisonTable | tiers or alternatives | ✓ / — / text values; scrolls inside its box on phones |
 | `faq` | Faq | questions | native `<details>`; emits FAQPage JSON-LD |
 | `ctaPanel` | CtaPanel | the closing ask | the one framed panel per page |
-| `form` | FormSection | demo, contact, applications | renders a form from `src/content/forms/` (§11) |
+| `contact` | Contact | how to reach the business | email, phone, address, hours; needs at least one |
+| `richText` | RichText | about text, policies, terms | Markdown, sanitised (no HTML, no images) |
+| `pageCards` | PageCards | hubs and related pages | lists pages by `card.group` / tag, so hubs update themselves |
+| `form` | FormSection | contact, enquiries | needs the forms service; not offered to customers yet |
+
+Every section also takes `hidden: true` to stay in `site.json` without showing. Pictures are `{ src, alt }`, `alt` required; `src` is a file in `assets/` or an https address. The hero's `media` product windows and the tabbed showcase and tier ladder sections were removed: customer sites use pictures.
 
 Layout-level components (not sections): `Nav`, `Footer`, `Seo`, `Logo`, `Prose` (legal/article text), `ProductWindow` (§8).
 

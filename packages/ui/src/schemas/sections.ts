@@ -5,7 +5,8 @@ import {
   headingFields,
   hrefSchema,
   iconSchema,
-  mediaSchema,
+  imageSchema,
+  sectionBase,
   text,
 } from './common';
 
@@ -17,6 +18,7 @@ import {
 
 export const heroSection = z.strictObject({
   type: z.literal('hero'),
+  ...sectionBase,
   layout: z.enum(['split', 'centered']).default('split'),
   /** Short context line above the H1 (e.g. the industry); omit unless it informs. */
   context: text(40).optional(),
@@ -29,19 +31,31 @@ export const heroSection = z.strictObject({
   ctas: z.array(ctaSchema).max(2).default([]),
   /** Quiet line under the buttons. */
   note: text(80).optional(),
-  media: mediaSchema.optional(),
+  /** Picture beside the headline (split layout) or below the buttons (centered). */
+  image: imageSchema.optional(),
   band: headingFields.band,
 });
 
 export const logoStripSection = z.strictObject({
   type: z.literal('logoStrip'),
+  ...sectionBase,
   label: z.string().min(1),
-  items: z.array(z.strictObject({ name: z.string().min(1), href: hrefSchema.optional() })).min(1),
+  items: z
+    .array(
+      z.strictObject({
+        name: z.string().min(1),
+        href: hrefSchema.optional(),
+        /** Logo picture; the name stays as its alt text. */
+        image: imageSchema.optional(),
+      }),
+    )
+    .min(1),
   band: headingFields.band,
 });
 
 export const statStripSection = z.strictObject({
   type: z.literal('statStrip'),
+  ...sectionBase,
   ...headingFields,
   title: z.string().optional(),
   items: z
@@ -53,6 +67,7 @@ export const statStripSection = z.strictObject({
 
 export const featureGridSection = z.strictObject({
   type: z.literal('featureGrid'),
+  ...sectionBase,
   ...headingFields,
   columns: z.union([z.literal(2), z.literal(3), z.literal(4)]).default(3),
   variant: z.enum(['plain', 'cards']).default('plain'),
@@ -60,6 +75,8 @@ export const featureGridSection = z.strictObject({
     .array(
       z.strictObject({
         icon: iconSchema.optional(),
+        /** Picture on top of the card (used instead of the icon). */
+        image: imageSchema.optional(),
         title: text(40),
         body: text(110),
         href: hrefSchema.optional(),
@@ -71,39 +88,22 @@ export const featureGridSection = z.strictObject({
   ctas: z.array(ctaSchema).max(2).default([]),
 });
 
-export const tabbedShowcaseSection = z.strictObject({
-  type: z.literal('tabbedShowcase'),
-  ...headingFields,
-  tabs: z
-    .array(
-      z.strictObject({
-        label: text(24),
-        icon: iconSchema.optional(),
-        title: text(40),
-        body: text(170),
-        bullets: z.array(text(50)).max(3).default([]),
-        link: ctaSchema.optional(),
-        media: mediaSchema,
-      }),
-    )
-    .min(2)
-    .max(4),
-});
-
 export const splitSection = z.strictObject({
   type: z.literal('split'),
+  ...sectionBase,
   ...headingFields,
   /** Paragraphs; the first should answer the heading on its own (AEO). */
   body: z.array(text(220)).min(1).max(2),
   bullets: z.array(text(60)).max(3).default([]),
   ctas: z.array(ctaSchema).max(2).default([]),
-  media: mediaSchema.optional(),
-  /** Put the media on the left. */
+  image: imageSchema.optional(),
+  /** Put the image on the left. */
   reverse: z.boolean().default(false),
 });
 
 export const stepsSection = z.strictObject({
   type: z.literal('steps'),
+  ...sectionBase,
   ...headingFields,
   steps: z
     .array(z.strictObject({ icon: iconSchema.optional(), title: text(32), body: text(80) }))
@@ -114,6 +114,7 @@ export const stepsSection = z.strictObject({
 
 export const comparisonTableSection = z.strictObject({
   type: z.literal('comparisonTable'),
+  ...sectionBase,
   ...headingFields,
   /** Column headings after the first (row-label) column. */
   columns: z
@@ -143,6 +144,7 @@ export const comparisonTableSection = z.strictObject({
 
 export const pricingTableSection = z.strictObject({
   type: z.literal('pricingTable'),
+  ...sectionBase,
   ...headingFields,
   plans: z
     .array(
@@ -164,14 +166,18 @@ export const pricingTableSection = z.strictObject({
 
 export const testimonialSection = z.strictObject({
   type: z.literal('testimonial'),
+  ...sectionBase,
   band: headingFields.band,
   quote: z.string().min(1),
   name: z.string().min(1),
   role: z.string().min(1),
+  /** Headshot of the person quoted (only with their permission). */
+  avatar: imageSchema.optional(),
 });
 
 export const pageCardsSection = z.strictObject({
   type: z.literal('pageCards'),
+  ...sectionBase,
   ...headingFields,
   /** List every page whose `card.group` matches. */
   group: z.string().min(1),
@@ -185,23 +191,9 @@ export const pageCardsSection = z.strictObject({
   linkLabel: z.string().default('Learn more'),
 });
 
-export const tierLadderSection = z.strictObject({
-  type: z.literal('tierLadder'),
-  ...headingFields,
-  tiers: z
-    .array(
-      z.strictObject({
-        name: z.string().min(1),
-        requirement: z.string().min(1),
-        benefits: z.array(text(60)).min(1).max(4),
-      }),
-    )
-    .min(2)
-    .max(5),
-});
-
 export const faqSection = z.strictObject({
   type: z.literal('faq'),
+  ...sectionBase,
   ...headingFields,
   /** Answers of 40–60 words read well and get quoted by answer engines. */
   items: z
@@ -212,6 +204,7 @@ export const faqSection = z.strictObject({
 
 export const ctaPanelSection = z.strictObject({
   type: z.literal('ctaPanel'),
+  ...sectionBase,
   ...headingFields,
   /** Email-first capture shown above the buttons. */
   capture: captureSchema.optional(),
@@ -221,30 +214,122 @@ export const ctaPanelSection = z.strictObject({
 
 export const formSection = z.strictObject({
   type: z.literal('form'),
+  ...sectionBase,
   ...headingFields,
   /** id of a form in `src/content/forms/`. */
   form: z.string().min(1),
   bullets: z.array(text(60)).max(4).default([]),
   bulletsTitle: z.string().optional(),
-  media: mediaSchema.optional(),
+  image: imageSchema.optional(),
 });
+
+export const richTextSection = z.strictObject({
+  type: z.literal('richText'),
+  ...sectionBase,
+  ...headingFields,
+  /**
+   * Markdown: paragraphs, ## and ### headings, lists, bold, links. For about text, policies
+   * and terms. Raw HTML and images are not allowed.
+   */
+  body: z.string().min(1).max(8000),
+});
+
+export const gallerySection = z.strictObject({
+  type: z.literal('gallery'),
+  ...sectionBase,
+  ...headingFields,
+  columns: z.union([z.literal(2), z.literal(3), z.literal(4)]).default(3),
+  images: z
+    .array(imageSchema.extend({ caption: text(80).optional() }))
+    .min(2)
+    .max(12),
+});
+
+export const offersSection = z.strictObject({
+  type: z.literal('offers'),
+  ...sectionBase,
+  ...headingFields,
+  columns: z.union([z.literal(2), z.literal(3)]).default(3),
+  /** Products or services, one card each. */
+  items: z
+    .array(
+      z.strictObject({
+        image: imageSchema.optional(),
+        badge: text(16).optional(),
+        title: text(40),
+        body: text(160),
+        price: text(24).optional(),
+        priceNote: text(30).optional(),
+        cta: ctaSchema.optional(),
+      }),
+    )
+    .min(1)
+    .max(9),
+});
+
+export const teamSection = z.strictObject({
+  type: z.literal('team'),
+  ...sectionBase,
+  ...headingFields,
+  members: z
+    .array(
+      z.strictObject({
+        /** Real photos only, and only with the person's permission. */
+        photo: imageSchema.optional(),
+        name: text(40),
+        role: text(40),
+        bio: text(140).optional(),
+      }),
+    )
+    .min(1)
+    .max(8),
+});
+
+export const contactSection = z
+  .strictObject({
+    type: z.literal('contact'),
+    ...sectionBase,
+    ...headingFields,
+    email: z.email().optional(),
+    phone: z
+      .string()
+      .regex(/^\+?[0-9 ()-]{6,24}$/, {
+        message: 'Use digits, spaces, brackets and dashes, e.g. +1 555 010 2030',
+      })
+      .optional(),
+    address: text(160).optional(),
+    /** One line per entry, e.g. "Mon-Fri 9:00-17:00". */
+    hours: z.array(text(60)).max(7).default([]),
+    ctas: z.array(ctaSchema).max(2).default([]),
+    /** Words shown beside each detail; change them to translate the section. */
+    emailLabel: text(20).default('Email'),
+    phoneLabel: text(20).default('Phone'),
+    addressLabel: text(20).default('Address'),
+    hoursLabel: text(20).default('Opening hours'),
+  })
+  .refine((c) => Boolean(c.email || c.phone || c.address), {
+    message: 'Add at least one of email, phone or address.',
+  });
 
 export const sectionSchema = z.discriminatedUnion('type', [
   heroSection,
   logoStripSection,
   statStripSection,
   featureGridSection,
-  tabbedShowcaseSection,
   splitSection,
   stepsSection,
   comparisonTableSection,
   pricingTableSection,
   testimonialSection,
   pageCardsSection,
-  tierLadderSection,
   faqSection,
   ctaPanelSection,
   formSection,
+  richTextSection,
+  gallerySection,
+  offersSection,
+  teamSection,
+  contactSection,
 ]);
 
 export type Section = z.infer<typeof sectionSchema>;

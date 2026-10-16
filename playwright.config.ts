@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 4330;
+// The fixture-site run uses its own port so it never reuses the normal preview server.
+const PORT = process.env.E2E_FULL ? 4331 : 4330;
 
 // End-to-end tests run against the production build (`pnpm build` first).
 // Locally they use the installed Google Chrome; set PW_CHANNEL=chromium in CI after

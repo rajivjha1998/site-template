@@ -7,6 +7,7 @@ import type { RenderContext } from '@blackboxops/ui/lib/resolve.ts';
 import type { Entity } from '@blackboxops/ui/schemas/entity.ts';
 import type { SiteConfig } from '@blackboxops/ui/schemas/site-config.ts';
 import { themeCss } from '@blackboxops/ui/lib/theme.ts';
+import { collectImageSrcs, readImageSizes, type ImageSize } from './images';
 
 export interface SitePage {
   path: string;
@@ -89,14 +90,23 @@ export function breadcrumbs(path: string, pages: SitePage[]): Breadcrumb[] {
   return trail;
 }
 
+let imageSizes: Promise<Record<string, ImageSize>> | undefined;
+
+/** Sizes of every image on the site, read once per build. */
+const getImageSizes = () => {
+  imageSizes ??= getSite().then((site) => readImageSizes(collectImageSrcs(site)));
+  return imageSizes;
+};
+
 export async function renderContext(
   currentPath: string,
   pages: SitePage[],
 ): Promise<RenderContext> {
-  const { forms } = await getSite();
+  const [{ forms }, images] = await Promise.all([getSite(), getImageSizes()]);
   return {
     // Product-window mockups (screens) aren't part of site.json yet.
     screens: {},
+    images,
     forms,
     cards: pageCards(pages),
     currentPath,
@@ -109,7 +119,7 @@ export async function renderContext(
 export function pageJsonLd(page: Page, path: string, entity: Entity): JsonLd[] {
   const nodes: JsonLd[] = [];
   if (page.softwareApplication) nodes.push(softwareApplicationLd(entity, path));
-  const faqItems = page.sections.flatMap((s) => (s.type === 'faq' ? s.items : []));
+  const faqItems = page.sections.flatMap((s) => (s.type === 'faq' && !s.hidden ? s.items : []));
   if (faqItems.length > 0) nodes.push(faqPageLd(faqItems));
   return nodes;
 }

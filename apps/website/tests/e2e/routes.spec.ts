@@ -1,14 +1,15 @@
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-// Every page in the built sitemap, plus the 404 page.
-const dist = fileURLToPath(new URL('../../dist/', import.meta.url));
-const sitemap = readFileSync(`${dist}sitemap-0.xml`, 'utf8');
+// Every page in the built sitemap, plus the 404 page. E2E_DIST and E2E_SITE (relative to the
+// repo root) point the same checks at the fixture site that uses every section.
+const dist = resolve(process.cwd(), process.env.E2E_DIST ?? 'apps/website/dist');
+const sitemap = readFileSync(`${dist}/sitemap-0.xml`, 'utf8');
 const routes = [...sitemap.matchAll(/<loc>https?:\/\/[^/]+(\/[^<]*)<\/loc>/g)].map((m) => m[1]!);
 const site = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../../../../site.json', import.meta.url)), 'utf8'),
+  readFileSync(resolve(process.cwd(), process.env.E2E_SITE ?? 'site.json'), 'utf8'),
 );
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

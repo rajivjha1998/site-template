@@ -41,6 +41,13 @@ export const pageSchema = z
         message: 'A page must start with exactly one hero section (it renders the only H1).',
       });
     }
+    if (page.sections[0]?.hidden) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['sections', 0, 'hidden'],
+        message: "The hero can't be hidden: it holds the page's only H1.",
+      });
+    }
     const headingIcons = page.sections.filter((s) => 'icon' in s && s.icon).length;
     if (headingIcons > 1) {
       ctx.addIssue({

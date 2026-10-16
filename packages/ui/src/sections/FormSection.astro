@@ -2,15 +2,15 @@
 import type { SectionOf } from '../schemas/sections';
 import type { FormDefinition } from '../schemas/form';
 import SectionShell from '../primitives/SectionShell.astro';
-import ProductWindow, { type ResolvedMedia } from '../components/ProductWindow.astro';
+import Picture from '../primitives/Picture.astro';
+import type { WithResolvedImage } from '../lib/image';
 import ConfigForm from '../forms/ConfigForm.astro';
 import CheckList from '../primitives/CheckList.astro';
 import IconTile from '../primitives/IconTile.astro';
 
-type Props = Omit<SectionOf<'form'>, 'type' | 'form' | 'media'> & {
+type Props = Omit<WithResolvedImage<SectionOf<'form'>>, 'type' | 'form'> & {
   uid: string;
   form: FormDefinition;
-  media?: ResolvedMedia;
   turnstileSiteKey?: string;
   formsOrigin?: string;
 };
@@ -26,7 +26,7 @@ const {
   form,
   bullets,
   bulletsTitle,
-  media,
+  image,
   turnstileSiteKey,
   formsOrigin,
 } = Astro.props;
@@ -48,7 +48,7 @@ const id = `${uid}-title`;
           <CheckList items={bullets} />
         </div>
       )}
-      {media && <ProductWindow media={media} />}
+      {image && <Picture image={image} ratio="16 / 10" />}
     </div>
     <div class="card">
       <ConfigForm form={form} turnstileSiteKey={turnstileSiteKey} formsOrigin={formsOrigin} />

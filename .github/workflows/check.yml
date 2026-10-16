@@ -1,5 +1,5 @@
 # Validates and builds every push to draft or main (e.g. hand edits or AI changes), so a
-# broken site.json is caught before Cloudflare Pages publishes it.
+# broken site.json is caught early (the Deploy site workflow validates again before publishing).
 name: Check site
 
 on:

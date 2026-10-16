@@ -1,19 +1,20 @@
 ---
 import type { SectionOf } from '../schemas/sections';
 import SectionShell from '../primitives/SectionShell.astro';
-import ProductWindow, { type ResolvedMedia } from '../components/ProductWindow.astro';
+import Picture from '../primitives/Picture.astro';
+import type { WithResolvedImage } from '../lib/image';
 import Ctas from '../primitives/Ctas.astro';
 import CheckList from '../primitives/CheckList.astro';
 import IconTile from '../primitives/IconTile.astro';
 
-type Props = Omit<SectionOf<'split'>, 'type' | 'media'> & { uid: string; media?: ResolvedMedia };
-const { uid, icon, anchor, title, titleAccent, lede, band, body, bullets, ctas, media, reverse } =
+type Props = Omit<WithResolvedImage<SectionOf<'split'>>, 'type'> & { uid: string };
+const { uid, icon, anchor, title, titleAccent, lede, band, body, bullets, ctas, image, reverse } =
   Astro.props;
 const id = `${uid}-title`;
 ---
 
 <SectionShell labelledBy={id} band={band} anchor={anchor}>
-  <div class:list={['split', { reverse, solo: !media }]}>
+  <div class:list={['split', { reverse, solo: !image }]}>
     <div class="copy">
       {icon && <IconTile name={icon} />}
       <h2 id={id}>
@@ -27,9 +28,9 @@ const id = `${uid}-title`;
       <CheckList items={bullets} />
       <Ctas ctas={ctas} />
     </div>
-    {media && (
+    {image && (
       <div class="media">
-        <ProductWindow media={media} />
+        <Picture image={image} ratio="4 / 3" radius="none" />
       </div>
     )}
   </div>
@@ -46,6 +47,12 @@ const id = `${uid}-title`;
   .solo {
     grid-template-columns: minmax(0, 1fr);
     max-width: 720px;
+  }
+
+  .media {
+    overflow: hidden;
+    border-radius: var(--r-panel);
+    box-shadow: var(--sh-win);
   }
 
   .reverse .media {

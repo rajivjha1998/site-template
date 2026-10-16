@@ -1,8 +1,12 @@
 ---
 import type { SectionOf } from '../schemas/sections';
+import Picture from '../primitives/Picture.astro';
+import type { WithResolvedImage } from '../lib/image';
 
-type Props = Omit<SectionOf<'testimonial'>, 'type'> & { uid: string };
-const { uid, band = 'accent', quote, name, role } = Astro.props;
+type Props = Omit<WithResolvedImage<SectionOf<'testimonial'>, 'avatar'>, 'type'> & {
+  uid: string;
+};
+const { uid, band = 'accent', quote, name, role, avatar } = Astro.props;
 const id = `${uid}-quote`;
 ---
 
@@ -15,8 +19,15 @@ const id = `${uid}-quote`;
       <p>{quote}</p>
     </blockquote>
     <figcaption>
-      <span class="name">{name}</span>
-      <span class="role">{role}</span>
+      {avatar && (
+        <span class="avatar">
+          <Picture image={avatar} ratio="1 / 1" radius="full" />
+        </span>
+      )}
+      <span class="who">
+        <span class="name">{name}</span>
+        <span class="role">{role}</span>
+      </span>
     </figcaption>
   </figure>
 </section>
@@ -67,9 +78,20 @@ const id = `${uid}-quote`;
 
   figcaption {
     display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--fs-small);
+  }
+
+  .avatar {
+    flex: none;
+    width: 48px;
+  }
+
+  .who {
+    display: flex;
     flex-wrap: wrap;
     gap: 4px 10px;
-    font-size: var(--fs-small);
   }
 
   .name {

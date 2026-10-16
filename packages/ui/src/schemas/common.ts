@@ -78,6 +78,42 @@ export const iconNames = [
 export const iconSchema = z.enum(iconNames);
 export type IconName = (typeof iconNames)[number];
 
+/**
+ * A file in the repo's `assets/` folder, e.g. `assets/logo.svg`. Folders are allowed, `..` and
+ * `//` are not, so a path can never point outside `assets/`.
+ */
+export const assetPathSchema = z
+  .string()
+  .regex(/^(?!.*\.\.)(?!.*\/\/)assets\/[A-Za-z0-9._/-]+\.(svg|png|jpe?g|webp|avif|ico)$/, {
+    message: 'Use a file in the assets/ folder, e.g. assets/logo.svg',
+  });
+
+/**
+ * Where an image comes from: a file in `assets/` (uploaded through the site builder) or a full
+ * https address.
+ */
+export const imageSrcSchema = z
+  .string()
+  .regex(
+    /^((?!.*\.\.)(?!.*\/\/)assets\/[A-Za-z0-9._/-]+\.(svg|png|jpe?g|webp|avif)|https:\/\/[^\s]+)$/,
+    {
+      message: 'Use an image in the assets/ folder (assets/hero.webp) or a full https:// address',
+    },
+  );
+
+/** An image on the page. `alt` is required: it is what screen readers and search engines read. */
+export const imageSchema = z.strictObject({
+  src: imageSrcSchema,
+  alt: z.string().min(1).max(160),
+});
+
+/** Fields every section shares. `hidden` keeps a section in `site.json` but off the page. */
+export const sectionBase = {
+  hidden: z.boolean().optional(),
+};
+
+export type Image = z.infer<typeof imageSchema>;
+
 /** Section background band (claude-design.md §4). */
 export const bandSchema = z.enum(['base', 'surface', 'panel', 'accent', 'dark']);
 

@@ -6,6 +6,8 @@ import type { PageCard } from '../schemas/page';
 /** Everything a section may need beyond its own content. Built once per page by the site. */
 export interface RenderContext {
   screens: Record<string, Screen>;
+  /** Size of every image used on the site, keyed by its `src`, read at build time. */
+  images: Record<string, { width?: number; height?: number }>;
   forms: Record<string, FormDefinition>;
   cards: PageCard[];
   currentPath: string;

@@ -1,8 +1,13 @@
 ---
 import type { SectionOf } from '../schemas/sections';
 import { withBase } from '../lib/href';
+import type { WithResolvedImage } from '../lib/image';
 
-type Props = Omit<SectionOf<'logoStrip'>, 'type'> & { uid: string };
+type Item = SectionOf<'logoStrip'>['items'][number];
+type Props = Omit<SectionOf<'logoStrip'>, 'type' | 'items'> & {
+  uid: string;
+  items: WithResolvedImage<Item>[];
+};
 const { uid, label, items, band = 'base' } = Astro.props;
 const id = `${uid}-label`;
 ---
@@ -13,9 +18,22 @@ const id = `${uid}-label`;
       {label}
     </p>
     <ul>
-      {items.map((item) => (
-        <li>{item.href ? <a href={withBase(item.href)}>{item.name}</a> : item.name}</li>
-      ))}
+      {items.map((item) => {
+        const label = item.image ? (
+          <img
+            class="logo"
+            src={item.image.src}
+            alt={item.image.alt}
+            width={item.image.width}
+            height={item.image.height}
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          item.name
+        );
+        return <li>{item.href ? <a href={withBase(item.href)}>{label}</a> : label}</li>;
+      })}
     </ul>
   </div>
 </section>
@@ -69,5 +87,12 @@ const id = `${uid}-label`;
   a {
     color: inherit;
     text-decoration: none;
+  }
+  .logo {
+    display: block;
+    width: auto;
+    max-width: 140px;
+    height: 28px;
+    object-fit: contain;
   }
 </style>

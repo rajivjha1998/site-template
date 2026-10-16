@@ -1,13 +1,13 @@
 ---
 import type { SectionOf } from '../schemas/sections';
-import ProductWindow, { type ResolvedMedia } from '../components/ProductWindow.astro';
+import Picture from '../primitives/Picture.astro';
+import type { WithResolvedImage } from '../lib/image';
 import Ctas from '../primitives/Ctas.astro';
 import EmailCapture from '../forms/EmailCapture.astro';
 import type { FormDefinition } from '../schemas/form';
 
-type Props = Omit<SectionOf<'hero'>, 'type' | 'media'> & {
+type Props = Omit<WithResolvedImage<SectionOf<'hero'>>, 'type'> & {
   uid: string;
-  media?: ResolvedMedia;
   /** The form behind `capture`, resolved by SectionRenderer. */
   captureForm?: FormDefinition;
   formsOrigin?: string;
@@ -25,7 +25,7 @@ const {
   capture,
   captureForm,
   formsOrigin,
-  media,
+  image,
   band = 'base',
 } = Astro.props;
 const id = `${uid}-title`;
@@ -55,9 +55,9 @@ const id = `${uid}-title`;
       <Ctas ctas={ctas} align={layout === 'centered' ? 'center' : 'start'} />
       {note && <p class="note">{note}</p>}
     </div>
-    {media && (
+    {image && (
       <div class="media">
-        <ProductWindow media={media} />
+        <Picture image={image} priority ratio="16 / 10" radius="none" />
       </div>
     )}
   </div>
@@ -125,6 +125,12 @@ const id = `${uid}-title`;
   .centered .copy {
     justify-items: center;
     text-align: center;
+  }
+
+  .media {
+    overflow: hidden;
+    border-radius: var(--r-panel);
+    box-shadow: var(--sh-win);
   }
 
   .centered .media {

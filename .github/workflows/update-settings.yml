@@ -41,6 +41,9 @@ on:
 
 permissions:
   contents: write
+  # Lets this workflow start the deploy below: GitHub doesn't start workflows from pushes made
+  # with the built-in token, but it does allow starting one on purpose.
+  actions: write
 
 # One update at a time per repo, in order; never drop a customer's change.
 concurrency:
@@ -106,6 +109,7 @@ jobs:
         run: pnpm build
 
       - name: Commit to draft
+        id: commit
         env:
           REQUEST_ID: ${{ github.event.client_payload.request_id || inputs.request_id || github.run_id }}
           BRANCH: ${{ github.event.client_payload.branch || 'draft' }}
@@ -120,8 +124,18 @@ jobs:
           else
             git commit -m "$MESSAGE ($REQUEST_ID)"
             git push origin "HEAD:$BRANCH"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "Committed $FILE to $BRANCH." >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # Publishes the draft preview (https://<owner>.github.io/<repo>/preview/).
+      - name: Update the draft preview
+        if: github.event_name == 'repository_dispatch' && steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run deploy-pages.yml --ref draft
+          echo "Preview is being updated (about 2 minutes)." >> "$GITHUB_STEP_SUMMARY"
 
       # Closes the sign-in session opened by verify-access (a branch named after request_id), so
       # the platform can see the save finished: the branch disappears only after a successful save.
@@ -137,13 +151,31 @@ jobs:
 
       # Optional one-step publish: merge draft into main after a successful save.
       - name: Publish to the live site
+        id: publish
         if: github.event_name == 'repository_dispatch' && contains(fromJSON('["true","yes","publish"]'), format('{0}', github.event.client_payload.publish))
         env:
           REQUEST_ID: ${{ github.event.client_payload.request_id || github.run_id }}
         run: |
+          # Placeholders ("[Pending: …]", the placeholder picture) must be replaced first.
+          # The change stays saved on draft; only publishing is refused.
+          node scripts/check-publish.mjs
           draft_sha=$(git rev-parse HEAD)
           git fetch -q origin main
           git checkout -q -B main origin/main
+          before=$(git rev-parse HEAD)
           git merge --no-ff --no-edit -m "Publish ($REQUEST_ID)" "$draft_sha"
           git push origin main
-          echo "Published to main." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$(git rev-parse HEAD)" != "$before" ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "Published to main." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Nothing new to publish." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Update the live site
+        if: steps.publish.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run deploy-pages.yml --ref main
+          echo "The live site is being updated (about 2 minutes)." >> "$GITHUB_STEP_SUMMARY"

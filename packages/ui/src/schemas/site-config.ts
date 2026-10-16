@@ -1,4 +1,6 @@
 import { z } from 'astro/zod';
+import { assetPathSchema } from './common';
+import { SITE_LIMITS } from './limits';
 import { formSchema } from './form';
 import { pageSchema } from './page';
 import { footerSchema, navigationSchema } from './site';
@@ -14,11 +16,7 @@ const hexColor = z
   .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, { message: 'Use a hex colour, e.g. #2563eb' });
 
 /** A file in the repo's `assets/` folder, e.g. `assets/logo.svg`. */
-export const assetPath = z
-  .string()
-  .regex(/^assets\/[A-Za-z0-9._/-]+\.(svg|png|jpe?g|webp|avif|ico)$/, {
-    message: 'Use a file in the assets/ folder, e.g. assets/logo.svg',
-  });
+export const assetPath = assetPathSchema;
 
 export const brandSchema = z.strictObject({
   /** Company or product name exactly as it should appear everywhere. */
@@ -59,6 +57,23 @@ export const siteConfigSchema = z
     forms: z.record(z.string().regex(/^[a-z0-9-]+$/), formSchema).default({}),
   })
   .superRefine((site, ctx) => {
+    const pageCount = Object.keys(site.pages).length;
+    if (pageCount > SITE_LIMITS.maxPages) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['pages'],
+        message: `A site can have at most ${SITE_LIMITS.maxPages} pages (this one has ${pageCount}).`,
+      });
+    }
+    for (const path of Object.keys(site.pages)) {
+      if (path.startsWith('/preview/') || path.startsWith('/assets/')) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['pages', path],
+          message: `"${path}" is reserved (the draft preview and the images live there). Pick another page address.`,
+        });
+      }
+    }
     if (!site.pages['/']) {
       ctx.addIssue({ code: 'custom', path: ['pages'], message: 'Add a home page at "/".' });
     }

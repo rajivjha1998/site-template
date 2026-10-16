@@ -11,7 +11,7 @@
 #   site with a draft branch.
 # Repo missing → creates it from this template (private), stores the access code as a salted
 #   hash on main plus the sign-in key (.site-builder/keys/<code>/key), lets its Actions commit,
-#   and creates the draft branch.
+#   sets up GitHub Pages hosting, and creates the draft branch (which starts the first preview).
 # The run is named "ensure-site <request_id>"; Build Watcher on this repo waits for it.
 #
 # One-time setup: Settings → Secrets and variables → Actions → New repository secret
@@ -117,6 +117,32 @@ jobs:
         run: |
           gh api -X PUT "repos/$OWNER/$REPO/actions/permissions/workflow" \
             -f default_workflow_permissions=write -F can_approve_pull_request_reviews=false --silent
+
+      # Hosting: each site is published with GitHub Pages from its gh-pages branch (live at the
+      # root, the draft preview in preview/). The branch and Pages are set up BEFORE the draft
+      # branch is created, because creating draft starts the first preview deploy.
+      # Needs the token's "Pages: Read and write" permission, and a GitHub plan that allows
+      # Pages for private repos. If either is missing the site is still created; this step warns.
+      - name: Set up hosting (GitHub Pages)
+        run: |
+          if ! gh api "repos/$OWNER/$REPO/git/ref/heads/gh-pages" --silent 2>/dev/null; then
+            page='<!doctype html><meta charset="utf-8"><title>Coming soon</title><p style="font-family:system-ui;max-width:30rem;margin:4rem auto">This website has not been published yet.</p>'
+            tree=$(jq -n --arg page "$page" '{tree:[{path:".nojekyll",mode:"100644",type:"blob",content:"Not a Jekyll site.\n"},{path:"index.html",mode:"100644",type:"blob",content:$page}]}' \
+              | gh api -X POST "repos/$OWNER/$REPO/git/trees" --input - --jq .sha)
+            commit=$(jq -n --arg tree "$tree" '{message:"Start the Pages branch",tree:$tree,parents:[]}' \
+              | gh api -X POST "repos/$OWNER/$REPO/git/commits" --input - --jq .sha)
+            gh api -X POST "repos/$OWNER/$REPO/git/refs" -f ref=refs/heads/gh-pages -f sha="$commit" --silent
+          fi
+          if gh api "repos/$OWNER/$REPO/pages" --silent 2>/dev/null; then
+            echo "GitHub Pages is on." >> "$GITHUB_STEP_SUMMARY"
+          elif out=$(jq -n '{source:{branch:"gh-pages",path:"/"}}' | gh api -X POST "repos/$OWNER/$REPO/pages" --input - 2>&1); then
+            echo "Turned GitHub Pages on." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::GitHub Pages could not be turned on, so there will be no preview yet. Check the token has Pages: Read and write, and that your GitHub plan allows Pages for private repos. GitHub said: $out"
+            echo "Hosting NOT set up: $out" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Preview: https://${OWNER,,}.github.io/$REPO/preview/" >> "$GITHUB_STEP_SUMMARY"
+          echo "Live:    https://${OWNER,,}.github.io/$REPO/" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Make sure the draft branch exists
         env:

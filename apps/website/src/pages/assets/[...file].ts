@@ -1,11 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { extname, join, relative, resolve } from 'node:path';
+import { extname, join, relative } from 'node:path';
 import type { APIRoute, GetStaticPaths } from 'astro';
+import { assetsDir } from '../../lib/assets';
 
 // Serves the repo's assets/ folder (logos, images uploaded through the site builder)
 // at /assets/<file>, so site.json can reference `assets/logo.svg` directly.
-// Astro runs from apps/website (bundling moves this file, so import.meta.url won't do).
-const root = resolve(process.cwd(), '../../assets');
+const root = assetsDir();
 
 const types: Record<string, string> = {
   '.svg': 'image/svg+xml',

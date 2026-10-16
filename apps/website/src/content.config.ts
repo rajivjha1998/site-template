@@ -8,7 +8,8 @@ import { siteConfigSchema } from '@blackboxops/ui/schemas/site-config.ts';
  */
 export const collections = {
   site: defineCollection({
-    loader: file('../../site.json', {
+    // SITE_CONFIG (relative to apps/website) points tests at a fixture; default is the real site.
+    loader: file(process.env.SITE_CONFIG ?? '../../site.json', {
       parser: (text) => ({ site: JSON.parse(text) as Record<string, unknown> }),
     }),
     schema: siteConfigSchema,
