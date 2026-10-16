@@ -6,7 +6,7 @@ import { siteConfigSchema } from '../packages/ui/src/schemas/site-config.ts';
 import { applySettings, toHex, toHref } from './apply-settings.mjs';
 
 const site = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../site.json', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('./fixtures/starter.site.json', import.meta.url)), 'utf8'),
 );
 
 describe('applySettings', () => {

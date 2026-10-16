@@ -13,7 +13,9 @@ import { generateSite, GenerationError } from './generate.mjs';
 // @ts-expect-error plain .mjs without type declarations
 import { buildSystemPrompt, buildUserPrompt } from './prompt.mjs';
 
-const starter = JSON.parse(readFileSync(new URL('../../site.json', import.meta.url), 'utf8'));
+const starter = JSON.parse(
+  readFileSync(new URL('../fixtures/starter.site.json', import.meta.url), 'utf8'),
+);
 const GOOD_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#2563eb"/></svg>';
 
