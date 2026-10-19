@@ -20,6 +20,7 @@ function args(argv) {
     if (argv[i] === '--brief') out.brief = argv[++i];
     else if (argv[i] === '--out') out.out = resolve(argv[++i]);
     else if (argv[i] === '--dry-run') out.dryRun = true;
+    else if (argv[i] === '--site-url') out.siteUrl = argv[++i];
     else if (argv[i] === '--model') out.model = argv[++i];
     else if (argv[i] === '--effort') out.effort = argv[++i];
   }
@@ -52,6 +53,9 @@ try {
     log: (line) => console.log(line),
   });
   const site = { $schema: './site.schema.json', ...result.site };
+  // Where the site really lives (GitHub Pages address). The Studio reads it to show the preview.
+  if (options.siteUrl && /^https:\/\/[^\s]+$/.test(options.siteUrl))
+    site.brand = { ...site.brand, url: options.siteUrl.replace(/\/+$/, '') };
   if (options.dryRun) {
     console.log(JSON.stringify({ site, assets: result.assets.map((a) => a.path) }, null, 2));
   } else {
